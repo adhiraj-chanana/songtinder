@@ -51,3 +51,7 @@ def callback():
     #print("this is your code\n",code)
     return render_template("callback.html")
 
+
+@app.route("/swipe")
+def swipe():
+    return render_template("swipe.html")
