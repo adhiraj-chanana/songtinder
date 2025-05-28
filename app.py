@@ -38,6 +38,9 @@ def callback():
     #print("token\n", token_info )
     session["access_token"] = token_info["access_token"]
     session["refresh_token"] = token_info["refresh_token"]
+    session["likedsongs"]=[]
+    session["dislikedsongs"]=[]
+
     #print("session_access_token\n", session["access_token"])
 
     song_url="https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10"
@@ -46,12 +49,38 @@ def callback():
     }
 
     songs = requests.get("https://api.spotify.com/v1/me/top/tracks", headers=auth_header)
-    songs_info=songs.json()
-    print("RECIEVED SONGS!!!\n", songs_info)
+    tracks = songs.json()["items"]
+    index=0
+    k=tracks[index]
+    index+=1
+
+    #print(i.keys())
+    #for i in tracks:
+    session["allsongs"]=tracks
+    #print(session["favsongs"s])
+    #print(session["favsongs"])
+    #print("RECIEVED SONGS!!!\n", songs_info)
     #print("this is your code\n",code)
-    return render_template("callback.html")
+    return render_template("swipe.html", track=k, index=index)
 
 
 @app.route("/swipe")
 def swipe():
     return render_template("swipe.html")
+
+@app.route("/handle_action", methods=["POST"])
+def handleaction():
+    action=request.form["action"]
+    index=int(request.form["index"])
+    favsongs=session.get("allsongs", [])
+    print("YOUR INTQ!!!\n", index)
+    if action=="like":
+        #print(session["favsongs"])
+        session["likedsongs"].append(session["allsongs"][index-1]["name"])
+    else:
+        session["dislikedsongs"].append(session["allsongs"][index-1]["name"])
+    return render_template("swipe.html", track=session["allsongs"][session["index"]])
+
+
+
+

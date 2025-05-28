@@ -1,15 +1,33 @@
-<!-- File: templates/login.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tinder for Spotify - Login</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+  <meta charset="UTF-8">
+  <title>Swipe Track</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='../static/css/swipe.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1 class="title">Lets start Swiping</h1>
+  <div class="container">
+    <div id="track-card">
+      <img src="{{ track['album']['images'][0]['url'] }}" alt="Album Art" id="album-art">
+      <h2 id="track-name">{{ track['name'] }}</h2>
+      <p id="artist-name">{{ track['artists'][0]['name'] }}</p>
+      {% if track['preview_url'] %}
+        <audio id="preview" controls>
+          <source src="{{ track['preview_url'] }}" type="audio/mpeg">
+        </audio>
+      {% else %}
+        <p>No preview available</p>
+      {% endif %}
     </div>
+
+    <form method="POST" action="/handle_action">
+      <input type="hidden" name="track_id" value="{{ track['id'] }}">
+      <input type="hidden" name="index" value="{{ index }}">
+      <div class="buttons">
+        <button type="submit" name="action" value="dislike" class="btn dislike">❌ Dislike</button>
+        <button type="submit" name="action" value="like" class="btn like">❤️ Like</button>
+      </div>
+    </form>
+  </div>
 </body>
 </html>
