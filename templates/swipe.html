@@ -23,9 +23,10 @@
     <form method="POST" action="/handle_action">
       <input type="hidden" name="track_id" value="{{ track['id'] }}">
       <input type="hidden" name="index" value="{{ index }}">
+      <input type="hidden" name="alltracks" value="{{ alltracks }}">
       <div class="buttons">
-        <button type="submit" name="action" value="dislike" class="btn dislike">❌ Dislike</button>
-        <button type="submit" name="action" value="like" class="btn like">❤️ Like</button>
+        <button type="submit" name="action" value="dislike" class="btn dislike"> Dislike </button>
+        <button type="submit" name="action" value="like" class="btn like"> Like </button>
       </div>
     </form>
   </div>

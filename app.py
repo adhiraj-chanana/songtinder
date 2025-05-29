@@ -1,19 +1,22 @@
 from flask import Flask, render_template, request, session
 import requests
 from dotenv import load_dotenv
-
+from flask_session import Session
 import os
 
+load_dotenv()
 
+app = Flask(__name__)
 client_id = os.environ.get("SPOTIFY_CLIENT_ID")
 redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI")
 scopes = os.environ.get("SPOTIFY_SCOPES")
 state = os.environ.get("STATE")
 client_secret= os.environ.get("CLIENT_SECRET")
-
+app.secret_key = os.environ.get("SECRET_KEY") or "fwbefwiejdiuebfibefib"
+app.config["SESSION_TYPE"] = "filesystem"
 spotify_auth_url="https://accounts.spotify.com/authorize?"+"client_id="+str(client_id)+"&response_type=code&redirect_uri="+str(redirect_uri)+"&scope="+str(scopes)+"&state="+str(state)
-app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY")
+Session(app)
+
 
 @app.route("/")
 def login():
@@ -38,8 +41,9 @@ def callback():
     #print("token\n", token_info )
     session["access_token"] = token_info["access_token"]
     session["refresh_token"] = token_info["refresh_token"]
-    session["likedsongs"]=[]
+    session["likedsongs"]=['hello']
     session["dislikedsongs"]=[]
+    session["allsongs"]=[]
 
     #print("session_access_token\n", session["access_token"])
 
@@ -72,15 +76,25 @@ def swipe():
 def handleaction():
     action=request.form["action"]
     index=int(request.form["index"])
+    #tracks=list(request.form["allltracks"])
+    #print("this is the track", tracks)
+    #name=request.form["track"]
+    song_index=index-1
+    liked_songs=session.get("likedsongs", [])
+    disliked_songs=session.get("dislikedsongs", [])
+    #print( "pRINTHIGN ", liked_songs)
     favsongs=session.get("allsongs", [])
-    print("YOUR INTQ!!!\n", index)
+    print("this is handle_action",len(favsongs))
+    #print("YOUR INTQ!!!\n", index)
     if action=="like":
         #print(session["favsongs"])
-        session["likedsongs"].append(session["allsongs"][index-1]["name"])
+        liked_songs.append(favsongs[song_index]["name"])
+        print(liked_songs)
+        session['likedsongs']=liked_songs
     else:
-        session["dislikedsongs"].append(session["allsongs"][index-1]["name"])
-    return render_template("swipe.html", track=session["allsongs"][session["index"]])
-
-
+        disliked_songs.append(favsongs[song_index]["name"])
+        print(disliked_songs)
+        session['dislikedsongs']=disliked_songs
+    return render_template("swipe.html", track=favsongs[index], index=index+1)
 
 
