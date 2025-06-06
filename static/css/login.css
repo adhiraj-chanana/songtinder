@@ -1,49 +1,101 @@
 /* File: static/css/login.css */
-
 * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  }
-  
-  body {
-    background-color: #191414;
-    color: #fff;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  
-  .container {
-    text-align: center;
-    padding: 2rem;
-  }
-  
-  .title {
-    font-size: 2.5rem;
-    margin-bottom: 0.5rem;
-  }
-  
-  .tagline {
-    font-size: 1.2rem;
-    margin-bottom: 2rem;
-    color: #b3b3b3;
-  }
-  
-  .login-btn {
-    display: inline-block;
-    padding: 1rem 2rem;
-    background-color: #1DB954;
-    color: #fff;
-    text-decoration: none;
-    font-size: 1rem;
-    border-radius: 50px;
-    transition: background-color 0.3s ease;
-  }
-  
-  .login-btn:hover {
-    background-color: #1ed760;
-  }
-  
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  background-color: #121212;
+  color: #fff;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated Gradient Background */
+.background {
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, #1db954, #191414, #1db954, #121212);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+  z-index: -1;
+  filter: blur(80px);
+  opacity: 0.4;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Glassmorphic Login Card */
+.login-card {
+  background: rgba(25, 20, 20, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 3rem 2.5rem;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+}
+
+.logo {
+  width: 60px;
+  margin-bottom: 1rem;
+}
+
+.title {
+  font-size: 2.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.tagline {
+  font-size: 1.1rem;
+  margin-bottom: 2rem;
+  color: #b3b3b3;
+}
+
+.login-btn {
+  display: inline-block;
+  padding: 0.9rem 2rem;
+  background-color: #1DB954;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1rem;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 14px rgba(29, 185, 84, 0.4);
+}
+
+.login-btn:hover {
+  background-color: #1ed760;
+  box-shadow: 0 6px 20px rgba(29, 185, 84, 0.6);
+  transform: scale(1.03);
+}
+
+.note {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.footer {
+  position: absolute;
+  bottom: 15px;
+  width: 100%;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #666;
+  letter-spacing: 0.5px;
+}
