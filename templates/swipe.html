@@ -3,14 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <title>Swipe Track</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='../static/css/swipe.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/swipe.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Cormorant+Garamond:wght@700&display=swap" rel="stylesheet">
+
 </head>
 <body>
+  <div class="background-overlay"></div>
+
+  <!-- Navbar -->
+  <div class="navbar">
+    <span class="navbar-title">SWIPETRACK</span>
+  </div>
+
+  <!-- Swipe Card -->
   <div class="container">
     <div id="track-card">
       <img src="{{ track['album']['images'][0]['url'] }}" alt="Album Art" id="album-art">
       <h2 id="track-name">{{ track['name'] }}</h2>
       <p id="artist-name">{{ track['artists'][0]['name'] }}</p>
+
       {% if track['preview_url'] %}
         <audio id="preview" controls>
           <source src="{{ track['preview_url'] }}" type="audio/mpeg">
@@ -30,5 +41,6 @@
       </div>
     </form>
   </div>
+
 </body>
 </html>

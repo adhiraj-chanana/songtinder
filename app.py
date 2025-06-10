@@ -125,16 +125,58 @@ def handleaction():
         if len(tags)%10==0 and len(tags)<30:
             response2 = client.models.generate_content(
                 model="gemini-2.0-flash",
-                contents=f"Give me 6 songs, comma-separated similar to these tags {tags}. Use the ",
-            )
-            print(response2)
+                contents= f"""
+                    I will give you music tags. Based only on these tags: {tags}, give me a list of exactly 6 Spotify songs that match these tags.
+
+                    Only output the song titles as a comma-separated list. Do NOT write anything else — no explanations, no numbering.
+
+                    Example format:
+                    Song1, Song2, Song3, Song4, Song5, Song6
+                    """,
+                )
+            #print(response2.text)
+            c=str(response2.text)
+            ab=c.split(", ")
+            print(ab)
+            access1=session.get("access_token")
+            headers2 = {
+                "Authorization": f"Bearer {access1}"  # Use a valid token
+            }
+
+            
+            for song_name in ab:
+                song_name_url=song_name.replace(" ", "%20")
+                print(song_name_url)
+                search_url=f"https://api.spotify.com/v1/search?q={song_name_url}&type=track&limit=1"
+                new_song = requests.get(search_url, headers=headers2)
+                track = new_song.json()
+                favsongs.pop(0)
+                favsongs.append(track['tracks']['items'][0])
+                session['allsongs']=favsongs
+                trial_a=session.get('allsongs', [])
+                for i in trial_a:
+                    print(i['name'])
         elif len(tags)>30:
             response2 = client.models.generate_content(
                 model="gemini-2.0-flash",
-                contents=f"Give me 6 songs, comma-separated similar to these tags {tags[:-30]}. The songs should be comma separated and nothing else.",
-            )
-            print(response2.text)
+                contents= f"""
+                    I will give you music tags. Based only on these tags: {tags}, give me a list of exactly 6 Spotify songs that match these tags.
+
+                    Only output the song titles as a comma-separated list. Do NOT write anything else — no explanations, no numbering.
+
+                    Example format:
+                    Song1, Song2, Song3, Song4, Song5, Song6
+                    """,
+                )
+            c=str(response2.text)
+            ab=c.split(", ")
+            print(ab)
+       
+            #print(response2.text)
+        
+       
             
+
        
         
 
