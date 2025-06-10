@@ -113,7 +113,11 @@ def handleaction():
 
         print(response.text)
         a=response.text.split()
-        tags.append(a)
+        if len(tags)>10:
+            tags.pop(0)
+            tags.append(a)
+        else:
+            tags.append(a)
         session["tags"]=tags
         #print(tags)
         # vectorizer = TfidfVectorizer()
@@ -122,7 +126,7 @@ def handleaction():
         # similarity_matrix = cosine_similarity(tag_matrix)
         # print(similarity_matrix)
         print(len(tags))
-        if len(tags)%10==0 and len(tags)<30:
+        if len(tags)%10==0:
             response2 = client.models.generate_content(
                 model="gemini-2.0-flash",
                 contents= f"""
@@ -156,21 +160,21 @@ def handleaction():
                 trial_a=session.get('allsongs', [])
                 for i in trial_a:
                     print(i['name'])
-        elif len(tags)>30:
-            response2 = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents= f"""
-                    I will give you music tags. Based only on these tags: {tags}, give me a list of exactly 6 Spotify songs that match these tags.
+        # elif len(tags)>=13:
+        #     response2 = client.models.generate_content(
+        #         model="gemini-2.0-flash",
+        #         contents= f"""
+        #             I will give you music tags. Based only on these tags: {tags}, give me a list of exactly 6 Spotify songs that match these tags.
 
-                    Only output the song titles as a comma-separated list. Do NOT write anything else — no explanations, no numbering.
+        #             Only output the song titles as a comma-separated list. Do NOT write anything else — no explanations, no numbering.
 
-                    Example format:
-                    Song1, Song2, Song3, Song4, Song5, Song6
-                    """,
-                )
-            c=str(response2.text)
-            ab=c.split(", ")
-            print(ab)
+        #             Example format:
+        #             Song1, Song2, Song3, Song4, Song5, Song6
+        #             """,
+        #         )
+        #     c=str(response2.text)
+        #     ab=c.split(", ")
+        #     print(ab)
        
             #print(response2.text)
         
