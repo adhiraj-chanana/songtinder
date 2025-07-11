@@ -69,6 +69,7 @@ def callback():
     print("THESE ARE THE KEYS!!!!")
     print(k.keys())
 
+
     #print(i.keys())
     #for i in tracks:
     session["allsongs"]=tracks
@@ -106,10 +107,10 @@ def handleaction():
         liked_songs.append(favsongs[song_index]["name"])
         song_data[favsongs[song_index]["name"]]={"id": favsongs[song_index]["id"], "artists": favsongs[song_index]["artists"]}
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-pro-002",
             contents=f"Give me 6 short, comma-separated descriptive tags for the song {favsongs[song_index]["name"]} by {favsongs[song_index]["artists"]}. Focus on mood, genre, tempo, context, and lyrics. done end on period only csv",
         )
-
+        print(favsongs[song_index]["preview_url"])
 
         print(response.text)
         a=response.text.split()
@@ -128,9 +129,9 @@ def handleaction():
         print(len(tags))
         if len(tags)%10==0:
             response2 = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-pro",
                 contents= f"""
-                    I will give you music tags. Based only on these tags: {tags}, give me a list of exactly 6 Spotify songs that match these tags.
+                    I will give you music tags. Based only on these tags: {tags}, give me a list of exactly 10 Spotify songs that match these tags.
 
                     Only output the song titles as a comma-separated list. Do NOT write anything else — no explanations, no numbering.
 
@@ -193,6 +194,8 @@ def handleaction():
         disliked_songs.append(favsongs[song_index]["name"])
         print(disliked_songs)
         session['dislikedsgptongs']=disliked_songs
+    if index>=19:
+        index=0
     return render_template("swipe.html", track=favsongs[index], index=index+1)
 
 
