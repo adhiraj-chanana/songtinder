@@ -3,11 +3,12 @@ from transformers import pipeline
 from sentence_transformers import SentenceTransformer
 import numpy as  np
 import faiss
-
+import torch
+import json
+import matplotlib.pyplot as plt
 
 
 song_data=pd.read_csv('data/spotify_songs.csv')
-
 
 classified_songs=[]
 
@@ -19,26 +20,50 @@ mood_labels=["happy", "sad", "energetic", "calm", "romantic",
  "dark", "uplifting", "dreamy", "aggressive", "melancholic", 
  "funky", "chill", "playful", "intense", "mellow"]
 
+all_labels=genre_labels+mood_labels
 
 # df_shuffled = song_data.sample(frac=1, random_state=42)
 song_info=[]
 song_sentences=[]
-classifier = pipeline("zero-shot-classification",
-                      model="facebook/bart-large-mnli")
+# #classifier = pipeline(
+#     "zero-shot-classification",
+#     model="valhalla/distilbart-mnli-12-1",
+#     device=0 
+# )
+
+
+batch_size = 16
+batch_sequence=[]
+batch_info=[]
+c=0
+
 for i,row in song_data.iterrows():
     genre=row['playlist_genre']
     sub_genre=row['playlist_subgenre']
     playlist_name=row['playlist_name']
-
-    sequence_to_classify=f"{genre}, {sub_genre}, {playlist_name}"
-    result_genre=classifier(sequence_to_classify, genre_labels)
-    result_mood=classifier(sequence_to_classify, mood_labels)
-    top_genres = result_genre['labels'][:3]
-    top_moods = result_mood['labels'][:3]
-    tags = top_genres + top_moods
-    sentence_to_embed = ", ".join(tags)
-    song_sentences.append(sentence_to_embed)
-    song_info.append([row["track_name"], row["track_artist"]])
+    sequence_to_classify=f"{genre}, {sub_genre}"
+    batch_sequence.append(sequence_to_classify)
+    batch_info.append([row["track_name"], row["track_artist"]])
+    if len(batch_sequence) == batch_size:
+        #results = classifier(batch_sequence, all_labels)
+        for result, info in zip(batch_sequence, batch_info):
+          #  tags = result['labels'][:4]
+          #  sentence_to_embed = ", ".join(tags)
+            song_sentences.append(result)
+            song_info.append(info)
+        batch_sequence = []
+        batch_sequence = []
+        print("batch" ,c )
+        c+=1
+print(len(song_sentences))
+print(len(song_info))
+if len(batch_sequence) > 0:
+    #esults = classifier(batch_sequence, all_labels)
+    for result, info in zip(batch_sequence, batch_info):
+        # tags = result['labels'][:4]
+        # sentence_to_embed = ", ".join(tags)
+        song_sentences.append(result)
+        song_info.append(info)
 
 #Embedding the senteces of the songs
 model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
@@ -54,7 +79,12 @@ norms = np.linalg.norm(combined_vector, axis=1, keepdims=True)
 normalized_vectors = combined_vector / norms
 index = faiss.IndexFlatIP(395)
 index.add(normalized_vectors)
-print(index.ntotal)
+faiss.write_index(index, "song_index.faiss")
+
+print("✅ Saved FAISS index to song_index.faiss")
+with open("song_info.json", "w") as f:
+    json.dump(song_info, f)
+print("✅ Saved song info to song_info.json")
 # print(song_sentences)
 # print(song_info)
 
