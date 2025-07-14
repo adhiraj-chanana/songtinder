@@ -16,8 +16,15 @@ state = os.environ.get("STATE")
 client_secret= os.environ.get("CLIENT_SECRET")
 app.secret_key = os.environ.get("SECRET_KEY") or "fwbefwiejdiuebfibefib"
 api_key=os.environ.get("API_KEY")
+last_api_key=os.environ.get("LAST_FM_API")
 app.config["SESSION_TYPE"] = "filesystem"
-spotify_auth_url="https://accounts.spotify.com/authorize?"+"client_id="+str(client_id)+"&response_type=code&redirect_uri="+str(redirect_uri)+"&scope="+str(scopes)+"&state="+str(state)
+spotify_auth_url = "https://accounts.spotify.com/authorize?" + \
+    "client_id=" + str(client_id) + \
+    "&response_type=code" + \
+    "&redirect_uri=" + str(redirect_uri) + \
+    "&scope=" + str(scopes) + \
+    "&state=" + str(state)
+
 client = genai.Client(api_key=api_key)
 
 
@@ -68,6 +75,37 @@ def callback():
     index+=1
     print("THESE ARE THE KEYS!!!!")
     print(k.keys())
+    print("trying to get audio features now!")
+    for song_dict in tracks:
+        #print(song_dict['id'])
+        #print(auth_header)
+        print(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={song_dict['artists'][0]}&track={song_dict['name']}&api_key={last_api_key}&format=json")
+        song_audio_tags= requests.get(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={song_dict['artists'][0]['name']}&track={song_dict['name']}&api_key={last_api_key}&format=json")
+        if song_audio_tags.status_code == 200:
+            # Parse the JSON response
+            response_data = song_audio_tags.json()
+            print(f"Full response: {response_data}")
+            
+            # Check if the response has tags
+            if 'tags' in response_data and 'tag' in response_data['tags']:
+                tags = response_data['tags']['tag']
+                
+                # Extract tag names
+                tag_names = []
+                for tag in tags:
+                    if 'name' in tag:
+                        tag_names.append(tag['name'])
+                
+                print(f"{tag_names}")
+                
+                # Store tags in your song dict
+                song_dict['lastfm_tags'] = tag_names
+                
+            else:
+                print(f"No tags found")
+                song_dict['lastfm_tags'] = []
+
+    
 
 
     #print(i.keys())
@@ -78,6 +116,7 @@ def callback():
     #print("RECIEVED SONGS!!!\n", songs_info)
     #print("this is your code\n",code)
     return render_template("swipe.html", track=k, index=index)
+
 
 
 @app.route("/swipe")
