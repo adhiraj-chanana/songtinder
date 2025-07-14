@@ -79,17 +79,16 @@ def callback():
     for song_dict in tracks:
         #print(song_dict['id'])
         #print(auth_header)
-        print(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={song_dict['artists'][0]}&track={song_dict['name']}&api_key={last_api_key}&format=json")
+        #print(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={song_dict['artists'][0]}&track={song_dict['name']}&api_key={last_api_key}&format=json")
         song_audio_tags= requests.get(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={song_dict['artists'][0]['name']}&track={song_dict['name']}&api_key={last_api_key}&format=json")
         if song_audio_tags.status_code == 200:
             # Parse the JSON response
             response_data = song_audio_tags.json()
-            print(f"Full response: {response_data}")
+            #print(f"Full response: {response_data}")
             
             # Check if the response has tags
-            if 'tags' in response_data and 'tag' in response_data['tags']:
-                tags = response_data['tags']['tag']
-                
+            if 'toptags' in response_data and 'tag' in response_data['toptags']:
+                tags = response_data['toptags']['tag']
                 # Extract tag names
                 tag_names = []
                 for tag in tags:
@@ -97,7 +96,7 @@ def callback():
                         tag_names.append(tag['name'])
                 
                 print(f"{tag_names}")
-                
+
                 # Store tags in your song dict
                 song_dict['lastfm_tags'] = tag_names
                 
