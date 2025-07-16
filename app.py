@@ -94,8 +94,9 @@ def callback():
                 for tag in tags:
                     if 'name' in tag:
                         tag_names.append(tag['name'])
+                        
                 
-                print(f"{tag_names}")
+                print(f"{tag_names[:10]}")
 
                 # Store tags in your song dict
                 song_dict['lastfm_tags'] = tag_names
