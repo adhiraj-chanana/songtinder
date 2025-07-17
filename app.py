@@ -6,7 +6,14 @@ import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
+from transformers import pipeline
+from sentence_transformers import SentenceTransformer
+from sentence_transformers import CrossEncoder
+import numpy as np
+import faiss
+import json
 load_dotenv()
+
 
 app = Flask(__name__)
 client_id = os.environ.get("SPOTIFY_CLIENT_ID")
@@ -17,6 +24,10 @@ client_secret= os.environ.get("CLIENT_SECRET")
 app.secret_key = os.environ.get("SECRET_KEY") or "fwbefwiejdiuebfibefib"
 api_key=os.environ.get("API_KEY")
 last_api_key=os.environ.get("LAST_FM_API")
+
+faiss_index = faiss.read_index("similarity_search/song_index.faiss")
+with open("similarity_search/song_info.json", "r") as f:
+    song_info = json.load(f)
 app.config["SESSION_TYPE"] = "filesystem"
 spotify_auth_url = "https://accounts.spotify.com/authorize?" + \
     "client_id=" + str(client_id) + \
@@ -76,6 +87,16 @@ def callback():
     print("THESE ARE THE KEYS!!!!")
     print(k.keys())
     print("trying to get audio features now!")
+    genre_tags=['edm', 'rap', 'pop', 'r&b', 'latin', 'rock']
+    subgenre_tags=['progressive electro house', 'southern hip hop', 'indie poptimism', 'latin hip hop', 'neo soul', 'pop edm', 'electro house', 'hard rock', 'gangster rap', 'electropop', 'urban contemporary', 'hip hop', 'dance pop', 'classic rock', 'trap', 'tropical', 'latin pop', 'hip pop', 'big room', 'new jack swing', 'post-teen pop', 'permanent wave', 'album rock', 'reggaeton']
+    similar_Songs=[]
+    model_cross= CrossEncoder('cross-encoder/nli-distilroberta-base')
+    GENRES = [tag.lower() for tag in genre_tags + subgenre_tags]
+    COMMON_TAGS = {
+    "music", "song", "songs", "favorite", "favorites", "spotify", "myspotigrambot",
+    "2020", "2021", "2022", "2023", "2024", "new", "old", "top", "hits", "artist", "track"
+}
+    model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
     for song_dict in tracks:
         #print(song_dict['id'])
         #print(auth_header)
@@ -85,24 +106,37 @@ def callback():
             # Parse the JSON response
             response_data = song_audio_tags.json()
             #print(f"Full response: {response_data}")
-            
-            # Check if the response has tags
             if 'toptags' in response_data and 'tag' in response_data['toptags']:
                 tags = response_data['toptags']['tag']
-                # Extract tag names
-                tag_names = []
-                for tag in tags:
-                    if 'name' in tag:
-                        tag_names.append(tag['name'])
-                        
-                
-                print(f"{tag_names[:10]}")
+                raw_tags = [tag['name'].strip().lower() for tag in tags if 'name' in tag]
 
-                # Store tags in your song dict
-                song_dict['lastfm_tags'] = tag_names
-                
+                # Filter tags
+
+                # Optional: remove duplicates
+                sequence = ' '.join(raw_tags[:10])
+                scores = model_cross.predict([(sequence, genre) for genre in GENRES])
+                scores = np.array(scores).flatten()
+                print("Tag sequence:", sequence)
+                best_index = scores.argmax()
+                best_genre = GENRES[int(best_index)]
+                best_score = scores[int(best_index)]  # ✅ this is a float
+
+                if best_score >= 0.7:
+                    print(f"High confidence genre: {best_genre} (score: {best_score:.2f})")
+                else:
+                    print(f"Low confidence match: {best_genre} (score: {best_score:.2f})")
+                embeddings = model.encode([sequence])
+                print("Embedding shape:", embeddings.shape)
+
+                normalized_vectors = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+                distances, indices = faiss_index.search(normalized_vectors, 5)
+
+                for idx, dist in zip(indices[0], distances[0]):
+                    track_name, artist_name = song_info[idx]
+                    #print(f"{track_name} by {artist_name} (Score: {dist:.4f})")
             else:
-                print(f"No tags found")
+                print(f"No tags found for {track_name}")
                 song_dict['lastfm_tags'] = []
 
     

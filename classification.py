@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 
 
 song_data=pd.read_csv('data/spotify_songs.csv')
+# Frequency of genres
+# Playlist Genre
+
 
 classified_songs=[]
 
@@ -70,14 +73,9 @@ model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
 embeddings = model.encode(song_sentences)
 print(embeddings.shape)
 audio_features=[]
-for i,row in song_data.iterrows():
-    audio_features.append([row['danceability'], row['energy'], row['key']/11, (row['loudness']+60)/60, row['mode'], row['speechiness'], row['acousticness'], row['instrumentalness'], row['liveness'], row['valence'], row['tempo']])
-audio_features=np.array(audio_features,  dtype=np.float32)
-combined_vector = np.hstack([embeddings, audio_features])
-print(combined_vector.shape)
-norms = np.linalg.norm(combined_vector, axis=1, keepdims=True)
-normalized_vectors = combined_vector / norms
-index = faiss.IndexFlatIP(395)
+norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+normalized_vectors = embeddings / norms
+index = faiss.IndexFlatIP(384)
 index.add(normalized_vectors)
 faiss.write_index(index, "song_index.faiss")
 
