@@ -82,6 +82,7 @@ def callback():
     songs = requests.get("https://api.spotify.com/v1/me/top/tracks", headers=auth_header)
     tracks = songs.json()["items"]
     index=0
+    song_recs=set()
     k=tracks[index]
     index+=1
     print("THESE ARE THE KEYS!!!!")
@@ -100,6 +101,7 @@ def callback():
     for song_dict in tracks:
         #print(song_dict['id'])
         #print(auth_header)
+        print(song_dict['name'])
         #print(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={song_dict['artists'][0]}&track={song_dict['name']}&api_key={last_api_key}&format=json")
         song_audio_tags= requests.get(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={song_dict['artists'][0]['name']}&track={song_dict['name']}&api_key={last_api_key}&format=json")
         if song_audio_tags.status_code == 200:
@@ -114,27 +116,23 @@ def callback():
 
                 # Optional: remove duplicates
                 sequence = ' '.join(raw_tags[:10])
-                scores = model_cross.predict([(sequence, genre) for genre in GENRES])
-                scores = np.array(scores).flatten()
-                print("Tag sequence:", sequence)
-                best_index = scores.argmax()
-                best_genre = GENRES[int(best_index)]
-                best_score = scores[int(best_index)]  # ✅ this is a float
+                raw_scores = model_cross.predict([(sequence, genre) for genre in GENRES])
+                scores = np.array([score[1] for score in raw_scores])  # take probability for label=1
 
-                if best_score >= 0.7:
-                    print(f"High confidence genre: {best_genre} (score: {best_score:.2f})")
-                else:
-                    print(f"Low confidence match: {best_genre} (score: {best_score:.2f})")
-                embeddings = model.encode([sequence])
+                top_indices = scores.argsort()[-5:][::-1]
+                top_genres = [(GENRES[i], scores[i]) for i in top_indices]
+
+                genre_sentence = f"{top_genres[0][0]} {top_genres[1][0]} {top_genres[2][0]}{top_genres[3][0]}{top_genres[4][0]}"
+                print(genre_sentence)
+                # Format the genres into a sentence
+                embeddings = model.encode([genre_sentence]) 
                 print("Embedding shape:", embeddings.shape)
-
                 normalized_vectors = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-
                 distances, indices = faiss_index.search(normalized_vectors, 5)
-
                 for idx, dist in zip(indices[0], distances[0]):
                     track_name, artist_name = song_info[idx]
-                    #print(f"{track_name} by {artist_name} (Score: {dist:.4f})")
+                    print(f"{track_name} by {artist_name} (Score: {dist:.4f})")
+                    song_recs.add((track_name,artist_name))
             else:
                 print(f"No tags found for {track_name}")
                 song_dict['lastfm_tags'] = []
