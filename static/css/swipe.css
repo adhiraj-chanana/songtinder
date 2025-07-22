@@ -168,3 +168,32 @@ audio {
   margin-right: 8px;
 }
 */
+
+.listen-now-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #1DB954 0%, #1ed760 100%);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 50px;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  font-family: 'Playfair Display', serif;
+}
+
+.listen-now-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(135deg, #1ed760 0%, #1DB954 100%);
+}
+
+.play-icon {
+  font-size: 1.2rem;
+}

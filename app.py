@@ -151,6 +151,7 @@ def callback():
     session["dislikedsongs"]=[]
     session["allsongs"]=[]
     session["song_embeddings"]=[]
+    session["liked_embeddings"]=[]  # New: track only liked song embeddings
     session["user_embedding_sum"]=np.zeros(384).tolist()  # Fixed: proper shape
     session["num_likes"]=0
     session["seen_songs"]=[]
@@ -190,6 +191,7 @@ def handleaction():
     
     # Get session data
     liked_songs = session.get("likedsongs", [])
+    liked_embeddings = session.get("liked_embeddings", [])  # Track liked song embeddings separately
     user_embedding_sum = np.array(session.get("user_embedding_sum"))
     num_likes = session.get("num_likes", 0)
     embeddings_list = session.get("song_embeddings", [])
@@ -199,7 +201,6 @@ def handleaction():
     
     # Ensure we don't go out of bounds
     if index >= len(all_songs):
-        # Handle end of songs - could redirect to results page
         return render_template("swipe.html", track=None, index=index, message="No more songs!")
     
     current_song = all_songs[index]
@@ -209,40 +210,78 @@ def handleaction():
         # Add current song to liked songs
         liked_songs.append(current_song['name'])
         
-        # Update user embedding
+        # Update user embedding ONLY with the current liked song
         if index < len(embeddings_list):
             current_embedding = np.array(embeddings_list[index])
-            user_embedding_sum += current_embedding
-            num_likes += 1
+            
+            # Store this embedding in liked_embeddings
+            liked_embeddings.append(embeddings_list[index])
+            
+            # Recalculate user preference from scratch using ONLY liked songs
+            if liked_embeddings:
+                # Convert all liked embeddings to numpy array
+                liked_matrix = np.array(liked_embeddings)
+                # Calculate weighted average (recent likes get slightly more weight)
+                weights = np.exp(np.linspace(0, 1, len(liked_embeddings)))  # Exponential weighting
+                weights = weights / np.sum(weights)  # Normalize weights
+                
+                # Calculate weighted average
+                user_embedding_sum = np.average(liked_matrix, axis=0, weights=weights)
+                num_likes = len(liked_embeddings)
             
             print(f"User has liked {num_likes} songs")
+            print(f"Current user vector magnitude: {np.linalg.norm(user_embedding_sum)}")
             
-            # Generate recommendations every 3 likes (more frequent feedback)
-            if num_likes > 0 and num_likes % 3 == 0:
-                print("Generating new recommendations...")
+            # Generate recommendations after every like (more responsive)
+            if num_likes > 0:
+                print("Generating new recommendations based on updated preferences...")
                 
-                # Calculate average user preference
-                user_vector = user_embedding_sum / num_likes
-                user_vector_normalized = user_vector / np.linalg.norm(user_vector)
+                # Use the recalculated user preference
+                user_vector_normalized = user_embedding_sum / np.linalg.norm(user_embedding_sum)
                 
-                # Search for similar songs using FAISS
+                print(f"User vector preview: {user_vector_normalized[:5]}...")  # Debug print
+                
+                # Search for similar songs using FAISS with some randomness
+                search_k = min(50, len(song_info))  # Get more candidates
                 distances, indices = faiss_index.search(
                     user_vector_normalized.reshape(1, -1), 
-                    20  # Get more candidates to filter from
+                    search_k
                 )
                 
-                recommendations_added = 0
-                max_recommendations = 8  # Limit recommendations per batch
+                # Add some randomness to recommendations
+                import random
                 
-                for idx, dist in zip(indices[0], distances[0]):
+                # Take top candidates but with some randomization
+                top_candidates = list(zip(indices[0][:25], distances[0][:25]))  # Top 25
+                # Sort by similarity but add small random factor
+                random_factor = 0.1  # 10% randomness
+                weighted_candidates = [(idx, dist + random.uniform(-random_factor, random_factor)) 
+                                     for idx, dist in top_candidates]
+                weighted_candidates.sort(key=lambda x: x[1])  # Sort by adjusted distance
+                
+                recommendations_added = 0
+                max_recommendations = 6  # Fewer per batch for variety
+                
+                for idx, _ in weighted_candidates:
                     if recommendations_added >= max_recommendations:
                         break
                         
                     track_name, artist_name = song_info[idx]
                     song_key = f"{track_name}_{artist_name}"
                     
-                    # Skip if already seen
+                    # Skip if already seen or in current playlist
                     if song_key in seen_songs:
+                        continue
+                    
+                    # Skip if it's too similar to songs already in the current session
+                    skip_song = False
+                    for existing_song in all_songs:
+                        if (existing_song['name'].lower() == track_name.lower() or 
+                            existing_song['artists'][0]['name'].lower() == artist_name.lower()):
+                            skip_song = True
+                            break
+                    
+                    if skip_song:
                         continue
                     
                     # Add to seen songs
@@ -260,16 +299,20 @@ def handleaction():
                         embeddings_list.append(new_embedding.tolist())
                         recommendations_added += 1
                         
-                        print(f"Added recommendation: {track_name} by {artist_name} (Score: {dist:.4f})")
+                        print(f"Added recommendation: {track_name} by {artist_name}")
                     else:
                         print(f"Could not find {track_name} by {artist_name} on Spotify")
     
     else:  # dislike
         disliked_songs.append(current_song["name"])
         print(f"Disliked: {current_song['name']}")
+        
+        # Optional: Use dislikes to adjust recommendations (negative feedback)
+        # You could subtract disliked embeddings or use them to filter future results
     
-    # Update session
+    # Update session with ALL the data
     session['likedsongs'] = liked_songs
+    session['liked_embeddings'] = liked_embeddings  # New: track liked embeddings separately
     session['dislikedsongs'] = disliked_songs
     session['num_likes'] = num_likes
     session["seen_songs"] = list(seen_songs)
