@@ -42,8 +42,8 @@ model_cross= CrossEncoder('cross-encoder/nli-distilroberta-base')
 model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
 
 Session(app)
-genre_tags=['edm', 'rap', 'pop', 'r&b', 'latin', 'rock']
-subgenre_tags=['progressive electro house', 'southern hip hop', 'indie poptimism', 'latin hip hop', 'neo soul', 'pop edm', 'electro house', 'hard rock', 'gangster rap', 'electropop', 'urban contemporary', 'hip hop', 'dance pop', 'classic rock', 'trap', 'tropical', 'latin pop', 'hip pop', 'big room', 'new jack swing', 'post-teen pop', 'permanent wave', 'album rock', 'reggaeton']
+genre_tags=['afrobeats', 'ambient', 'arabic', 'blues', 'brazilian', 'cantopop', 'classical', 'country', 'disco', 'electronic', 'folk', 'funk', 'gaming', 'gospel', 'hip-hop', 'indian', 'indie', 'j-pop', 'jazz', 'k-pop', 'korean', 'latin', 'lofi', 'mandopop', 'metal', 'pop', 'punk', 'r&b', 'reggae', 'rock', 'soca', 'soul', 'turkish', 'wellness', 'world']
+subgenre_tags=['80s', '90s', 'academic', 'african', 'afro house', 'afro-latin', 'alternative', 'amapiano', 'american', 'anime', 'australian', 'avant-garde', 'bedroom', 'bhangra', 'bollywood', 'cajun', 'carnival', 'celtic', 'chill', 'chinese', 'choral', 'cinematic', 'classic', 'classical', 'cumbia', 'death', 'deep house', 'delta', 'desi', 'drama', 'drill', 'essential', 'experimental', 'feel-good', 'forró', 'french', 'funk', 'fusion', 'future', 'future bass', 'gangster', 'global', 'gqom', 'grime', 'hardstyle', 'heavy', 'hip-hop', 'indie', 'indigenous', 'irish', 'italo', 'japanese', 'jewish', 'klezmer', 'latin', 'mainstream', 'meditative', 'melodic', 'modern', 'neo-classical', 'nigerian', 'noir', 'nordic', 'pop', 'pop punk', 'post-rock', 'reggaeton', 'retro', 'samba', 'scandi', 'smooth', 'soft', 'soundtracks', 'southern', 'spanish', 'tango', 'techno', 'throat singing', 'throwback', 'trap', 'tropical', 'vaporwave', 'workout', 'yoga']
 
 GENRES = [tag.lower() for tag in genre_tags + subgenre_tags]
 
@@ -76,7 +76,7 @@ def callback():
     session["song_embeddings"]=[]
     session["user_embedding_sum"]=np.zeros((1,384))
     session["num_likes"]=0
-    session["seen_song_ids"]=set()
+    session["seen_songs"]=[]
     session["tags"]=[]
 
     #print("session_access_token\n", session["access_token"])
@@ -174,17 +174,19 @@ def handleaction():
     "Authorization": f"Bearer {session["access_token"]}"
     }
     liked_songs=session.get("likedsongs", [])
-    user_embedding_sum=session.get("user_embedding_sum",np.zeros((1,384)))
+    user_embedding_sum = np.array(session.get("user_embedding_sum")).reshape(-1)
     numlikes=session.get("num_likes",0)
-    embeddings_matrix=session.get("song_embeddings")
+    embeddings_matrix = np.vstack(session.get("song_embeddings"))
     disliked_songs=session.get("dislikedsongs", [])
     all_songs=session.get("allsongs", [])
+    seen = set(session.get("seen_songs", []))
     if action=="like":
         current_embedding = session["song_embeddings"][index]
-        user_embedding_sum+=current_embedding
+        current_embedding = np.array(session["song_embeddings"][index]).reshape(-1)
+        user_embedding_sum += current_embedding
         numlikes+=1
+        print(numlikes)
         liked_songs.append(all_songs[index]['name'])
-
 
         if numlikes%5==0:
             #searching with 5 liked songs with faiss to get 10 recommendations
@@ -195,6 +197,10 @@ def handleaction():
             for idx, dist in zip(indices[0], distances[0]):
                 track_name, artist_name = song_info[idx]
                 print(f"{track_name} by {artist_name} (Score: {dist:.4f})")
+                if (track_name,artist_name) not in seen:
+                    seen.add((track_name, artist_name))
+                else:
+                    continue
                 song_name_url=track_name.replace(" ", "%20")
                 search_url=f"https://api.spotify.com/v1/search?q={song_name_url}&type=track&limit=1"
                 new_song = requests.get(search_url, headers=auth_header)
@@ -210,23 +216,23 @@ def handleaction():
                         sequence = ' '.join(raw_tags)
                         raw_scores = model_cross.predict([(sequence, genre) for genre in GENRES])
                         scores = np.array([score[1] for score in raw_scores])  # take probability for label=1
-
                         top_indices = scores.argsort()[-5:][::-1]
                         top_genres = [(GENRES[i], scores[i]) for i in top_indices]
                         genre_sentence = f"{top_genres[0][0]} {top_genres[1][0]} {top_genres[2][0]}{top_genres[3][0]}{top_genres[4][0]}"
                         # Format the genres into a sentence
                         embedding = model.encode([genre_sentence])[0]
-                        embeddings_matrix = np.vstack(session.get("song_embeddings"))
                         normalized_vectors = embedding / np.linalg.norm(embedding)
                         normalized_embedding = normalized_vectors.reshape(-1)
                         embeddings_matrix = np.vstack([embeddings_matrix, normalized_embedding])
-                        session['song_embeddings']=embeddings_matrix
     else:
         disliked_songs.append(all_songs[index]["name"])
         print(disliked_songs)
         session['dislikedsongs']=disliked_songs
     session['num_likes']=numlikes
-    session['user_embedding_sum']=user_embedding_sum 
+    session["seen_songs"] = list(seen)
+    session["user_embedding_sum"] = user_embedding_sum.tolist()
+    session["song_embeddings"] = embeddings_matrix.tolist()
+    session["allsongs"]=all_songs
     return render_template("swipe.html", track=all_songs[index], index=index+1)
 
 
