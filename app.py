@@ -14,7 +14,6 @@ import faiss
 import json
 load_dotenv()
 
-
 app = Flask(__name__)
 client_id = os.environ.get("SPOTIFY_CLIENT_ID")
 redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI")
@@ -47,6 +46,84 @@ subgenre_tags=['80s', '90s', 'academic', 'african', 'afro house', 'afro-latin', 
 
 GENRES = [tag.lower() for tag in genre_tags + subgenre_tags]
 
+def get_song_embedding(song_dict, artist_name=None, track_name=None):
+    """Extract embedding for a song using Last.fm tags and genre classification"""
+    try:
+        if artist_name is None:
+            artist_name = song_dict['artists'][0]['name']
+        if track_name is None:
+            track_name = song_dict['name']
+            
+        print(f"Getting embedding for: {track_name} by {artist_name}")
+        
+        song_audio_tags = requests.get(
+            f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={artist_name}&track={track_name}&api_key={last_api_key}&format=json"
+        )
+        
+        if song_audio_tags.status_code == 200:
+            response_data = song_audio_tags.json()
+            if 'toptags' in response_data and 'tag' in response_data['toptags']:
+                tags = response_data['toptags']['tag']
+                raw_tags = [tag['name'].strip().lower() for tag in tags if 'name' in tag]
+                
+                if raw_tags:  # Only proceed if we have tags
+                    sequence = ' '.join(raw_tags)
+                    raw_scores = model_cross.predict([(sequence, genre) for genre in GENRES])
+                    scores = np.array([score[1] for score in raw_scores])
+                    
+                    top_indices = scores.argsort()[-5:][::-1]
+                    top_genres = [GENRES[i] for i in top_indices]
+                    
+                    # Create a more natural genre sentence with spaces
+                    genre_sentence = ' '.join(top_genres)
+                    print(f"Genre sentence: {genre_sentence}")
+                    
+                    # Get embedding and normalize
+                    embedding = model.encode([genre_sentence])[0]
+                    normalized_embedding = embedding / np.linalg.norm(embedding)
+                    
+                    return normalized_embedding
+        
+        print(f"No tags found for {track_name}, using default embedding")
+        # Return a default embedding if no tags found
+        default_embedding = model.encode(["pop music"])[0]
+        return default_embedding / np.linalg.norm(default_embedding)
+        
+    except Exception as e:
+        print(f"Error getting embedding for {track_name}: {e}")
+        # Return default embedding on error
+        default_embedding = model.encode(["pop music"])[0]
+        return default_embedding / np.linalg.norm(default_embedding)
+
+def search_spotify_track(track_name, artist_name, auth_header):
+    """Search for a track on Spotify and return track info"""
+    try:
+        # Clean up the search query
+        track_query = track_name.replace(" ", "%20").replace("&", "%26")
+        artist_query = artist_name.replace(" ", "%20").replace("&", "%26")
+        search_url = f"https://api.spotify.com/v1/search?q=track:{track_query}%20artist:{artist_query}&type=track&limit=1"
+        
+        response = requests.get(search_url, headers=auth_header)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data['tracks']['items']:
+                return data['tracks']['items'][0]
+        
+        # Fallback: try simpler search
+        simple_search = f"https://api.spotify.com/v1/search?q={track_query}&type=track&limit=1"
+        response = requests.get(simple_search, headers=auth_header)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data['tracks']['items']:
+                return data['tracks']['items'][0]
+                
+    except Exception as e:
+        print(f"Error searching for {track_name}: {e}")
+    
+    return None
+
 @app.route("/")
 def login():
     return render_template("login.html", spotify_auth_url=spotify_auth_url)
@@ -67,100 +144,36 @@ def callback():
     }
     response = requests.post(token_url, data=payload, headers=headers)
     token_info=response.json()
-    #print("token\n", token_info )
+    
     session["access_token"] = token_info["access_token"]
     session["refresh_token"] = token_info["refresh_token"]
     session["likedsongs"]=[]
     session["dislikedsongs"]=[]
     session["allsongs"]=[]
     session["song_embeddings"]=[]
-    session["user_embedding_sum"]=np.zeros((1,384))
+    session["user_embedding_sum"]=np.zeros(384).tolist()  # Fixed: proper shape
     session["num_likes"]=0
     session["seen_songs"]=[]
     session["tags"]=[]
 
-    #print("session_access_token\n", session["access_token"])
-
-    song_url="https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10"
     auth_header={
-    "Authorization": f"Bearer {session["access_token"]}"
+        "Authorization": f"Bearer {session['access_token']}"
     }
 
+    # Get top tracks
     songs = requests.get("https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10", headers=auth_header)
     tracks = songs.json()["items"]
-    index=0
-    song_recs=set()
-    k=tracks[index]
-    print("THESE ARE THE KEYS!!!!")
-    print(k.keys())
-    print("trying to get audio features now!")
-    similar_Songs=[]
     
-    COMMON_TAGS = {
-    "music", "song", "songs", "favorite", "favorites", "spotify", "myspotigrambot",
-    "2020", "2021", "2022", "2023", "2024", "new", "old", "top", "hits", "artist", "track"
-}
-    
-    embeds=[]
+    # Generate embeddings for initial tracks
+    embeds = []
     for song_dict in tracks:
-        #print(song_dict['id'])
-        #print(auth_header)
-        print(song_dict['name'])
-        #print(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={song_dict['artists'][0]}&track={song_dict['name']}&api_key={last_api_key}&format=json")
-        song_audio_tags= requests.get(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={song_dict['artists'][0]['name']}&track={song_dict['name']}&api_key={last_api_key}&format=json")
-        if song_audio_tags.status_code == 200:
-            # Parse the JSON response
-            response_data = song_audio_tags.json()
-            #print(f"Full response: {response_data}")
-            if 'toptags' in response_data and 'tag' in response_data['toptags']:
-                tags = response_data['toptags']['tag']
-                raw_tags = [tag['name'].strip().lower() for tag in tags if 'name' in tag]
-
-                # Filter tags
-
-                # Optional: remove duplicates
-                sequence = ' '.join(raw_tags)
-                raw_scores = model_cross.predict([(sequence, genre) for genre in GENRES])
-                scores = np.array([score[1] for score in raw_scores])  # take probability for label=1
-
-                top_indices = scores.argsort()[-5:][::-1]
-                top_genres = [(GENRES[i], scores[i]) for i in top_indices]
-
-                genre_sentence = f"{top_genres[0][0]} {top_genres[1][0]} {top_genres[2][0]}{top_genres[3][0]}{top_genres[4][0]}"
-                print(genre_sentence)
-                # Format the genres into a sentence
-                embeddings = model.encode([genre_sentence]) 
-                print("Embedding shape:", embeddings.shape)
-                normalized_vectors = embeddings / np.linalg.norm(embeddings)
-                embeds.append(normalized_vectors)
-                #distances, indices = faiss_index.search(normalized_vectors, 5)
-                #for idx, dist in zip(indices[0], distances[0]):
-                 #   track_name, artist_name = song_info[idx]
-                 #   print(f"{track_name} by {artist_name} (Score: {dist:.4f})")
-                  # song_recs.add((track_name,artist_name))
-            # else:
-            #     print(f"No tags found for {track_name}")
-            #     song_dict['lastfm_tags'] = []
-    session['song_embeddings']=embeds
-    new_tracks=[]
-    # for song_name,artist in song_recs:
-    #     song_name_url=song_name.replace(" ", "%20")
-    #     print(song_name_url)
-    #     search_url=f"https://api.spotify.com/v1/search?q={song_name_url}&type=track&limit=1"
-    #     new_song = requests.get(search_url, headers=auth_header)
-    #     track = new_song.json()
-    #     new_tracks.append(track['tracks']['items'][0])
-
-    #print(i.keys())
-    #for i in tracks:
-    session["allsongs"]=tracks
-    #print(session["favsongs"s])
-    #print(session["favsongs"])
-    #print("RECIEVED SONGS!!!\n", songs_info)
-    #print("this is your code\n",code)
-    return render_template("swipe.html", track=k, index=index)
-
-
+        embedding = get_song_embedding(song_dict)
+        embeds.append(embedding.tolist())
+    
+    session['song_embeddings'] = embeds
+    session["allsongs"] = tracks
+    
+    return render_template("swipe.html", track=tracks[0], index=0)
 
 @app.route("/swipe")
 def swipe():
@@ -168,71 +181,110 @@ def swipe():
 
 @app.route("/handle_action", methods=["POST"])
 def handleaction():
-    action=request.form["action"]
-    index=int(request.form["index"])
-    auth_header={
-    "Authorization": f"Bearer {session["access_token"]}"
+    action = request.form["action"]
+    index = int(request.form["index"])
+    
+    auth_header = {
+        "Authorization": f"Bearer {session['access_token']}"
     }
-    liked_songs=session.get("likedsongs", [])
-    user_embedding_sum = np.array(session.get("user_embedding_sum")).reshape(-1)
-    numlikes=session.get("num_likes",0)
-    embeddings_matrix = np.vstack(session.get("song_embeddings"))
-    disliked_songs=session.get("dislikedsongs", [])
-    all_songs=session.get("allsongs", [])
-    seen = set(session.get("seen_songs", []))
-    if action=="like":
-        current_embedding = session["song_embeddings"][index]
-        current_embedding = np.array(session["song_embeddings"][index]).reshape(-1)
-        user_embedding_sum += current_embedding
-        numlikes+=1
-        print(numlikes)
-        liked_songs.append(all_songs[index]['name'])
-
-        if numlikes%5==0:
-            #searching with 5 liked songs with faiss to get 10 recommendations
-            user_vector = user_embedding_sum / numlikes
-            normal_embedded_sum=user_vector / np.linalg.norm(user_vector)
-            distances, indices = faiss_index.search(normal_embedded_sum.reshape(1, -1), 10)
-
-            for idx, dist in zip(indices[0], distances[0]):
-                track_name, artist_name = song_info[idx]
-                print(f"{track_name} by {artist_name} (Score: {dist:.4f})")
-                if (track_name,artist_name) not in seen:
-                    seen.add((track_name, artist_name))
-                else:
-                    continue
-                song_name_url=track_name.replace(" ", "%20")
-                search_url=f"https://api.spotify.com/v1/search?q={song_name_url}&type=track&limit=1"
-                new_song = requests.get(search_url, headers=auth_header)
-                track = new_song.json()
-                all_songs.append(track['tracks']['items'][0])
-                song_audio_tags= requests.get(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={artist_name}&track={track_name}&api_key={last_api_key}&format=json")
-                if song_audio_tags.status_code == 200:
-                    # Parse the JSON response
-                    response_data = song_audio_tags.json()
-                    if 'toptags' in response_data and 'tag' in response_data['toptags']:
-                        tags = response_data['toptags']['tag']
-                        raw_tags = [tag['name'].strip().lower() for tag in tags if 'name' in tag]
-                        sequence = ' '.join(raw_tags)
-                        raw_scores = model_cross.predict([(sequence, genre) for genre in GENRES])
-                        scores = np.array([score[1] for score in raw_scores])  # take probability for label=1
-                        top_indices = scores.argsort()[-5:][::-1]
-                        top_genres = [(GENRES[i], scores[i]) for i in top_indices]
-                        genre_sentence = f"{top_genres[0][0]} {top_genres[1][0]} {top_genres[2][0]}{top_genres[3][0]}{top_genres[4][0]}"
-                        # Format the genres into a sentence
-                        embedding = model.encode([genre_sentence])[0]
-                        normalized_vectors = embedding / np.linalg.norm(embedding)
-                        normalized_embedding = normalized_vectors.reshape(-1)
-                        embeddings_matrix = np.vstack([embeddings_matrix, normalized_embedding])
-    else:
-        disliked_songs.append(all_songs[index]["name"])
-        print(disliked_songs)
-        session['dislikedsongs']=disliked_songs
-    session['num_likes']=numlikes
-    session["seen_songs"] = list(seen)
+    
+    # Get session data
+    liked_songs = session.get("likedsongs", [])
+    user_embedding_sum = np.array(session.get("user_embedding_sum"))
+    num_likes = session.get("num_likes", 0)
+    embeddings_list = session.get("song_embeddings", [])
+    disliked_songs = session.get("dislikedsongs", [])
+    all_songs = session.get("allsongs", [])
+    seen_songs = set(session.get("seen_songs", []))
+    
+    # Ensure we don't go out of bounds
+    if index >= len(all_songs):
+        # Handle end of songs - could redirect to results page
+        return render_template("swipe.html", track=None, index=index, message="No more songs!")
+    
+    current_song = all_songs[index]
+    current_song_id = current_song.get('id', f"{current_song['name']}_{current_song['artists'][0]['name']}")
+    
+    if action == "like":
+        # Add current song to liked songs
+        liked_songs.append(current_song['name'])
+        
+        # Update user embedding
+        if index < len(embeddings_list):
+            current_embedding = np.array(embeddings_list[index])
+            user_embedding_sum += current_embedding
+            num_likes += 1
+            
+            print(f"User has liked {num_likes} songs")
+            
+            # Generate recommendations every 3 likes (more frequent feedback)
+            if num_likes > 0 and num_likes % 3 == 0:
+                print("Generating new recommendations...")
+                
+                # Calculate average user preference
+                user_vector = user_embedding_sum / num_likes
+                user_vector_normalized = user_vector / np.linalg.norm(user_vector)
+                
+                # Search for similar songs using FAISS
+                distances, indices = faiss_index.search(
+                    user_vector_normalized.reshape(1, -1), 
+                    20  # Get more candidates to filter from
+                )
+                
+                recommendations_added = 0
+                max_recommendations = 8  # Limit recommendations per batch
+                
+                for idx, dist in zip(indices[0], distances[0]):
+                    if recommendations_added >= max_recommendations:
+                        break
+                        
+                    track_name, artist_name = song_info[idx]
+                    song_key = f"{track_name}_{artist_name}"
+                    
+                    # Skip if already seen
+                    if song_key in seen_songs:
+                        continue
+                    
+                    # Add to seen songs
+                    seen_songs.add(song_key)
+                    
+                    # Search for the song on Spotify
+                    spotify_track = search_spotify_track(track_name, artist_name, auth_header)
+                    
+                    if spotify_track:
+                        # Get embedding for the new song
+                        new_embedding = get_song_embedding(spotify_track, artist_name, track_name)
+                        
+                        # Add to our collections
+                        all_songs.append(spotify_track)
+                        embeddings_list.append(new_embedding.tolist())
+                        recommendations_added += 1
+                        
+                        print(f"Added recommendation: {track_name} by {artist_name} (Score: {dist:.4f})")
+                    else:
+                        print(f"Could not find {track_name} by {artist_name} on Spotify")
+    
+    else:  # dislike
+        disliked_songs.append(current_song["name"])
+        print(f"Disliked: {current_song['name']}")
+    
+    # Update session
+    session['likedsongs'] = liked_songs
+    session['dislikedsongs'] = disliked_songs
+    session['num_likes'] = num_likes
+    session["seen_songs"] = list(seen_songs)
     session["user_embedding_sum"] = user_embedding_sum.tolist()
-    session["song_embeddings"] = embeddings_matrix.tolist()
-    session["allsongs"]=all_songs
-    return render_template("swipe.html", track=all_songs[index], index=index+1)
+    session["song_embeddings"] = embeddings_list
+    session["allsongs"] = all_songs
+    
+    # Get next song
+    next_index = index + 1
+    if next_index < len(all_songs):
+        next_track = all_songs[next_index]
+        return render_template("swipe.html", track=next_track, index=next_index)
+    else:
+        # No more songs - could show results or generate more
+        return render_template("swipe.html", track=None, index=next_index, message="No more songs available!")
 
-
+if __name__ == "__main__":
+    app.run(debug=True)
