@@ -38,11 +38,14 @@ spotify_auth_url = "https://accounts.spotify.com/authorize?" + \
 
 client = genai.Client(api_key=api_key)
 
-
-
+model_cross= CrossEncoder('cross-encoder/nli-distilroberta-base')
+model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
 
 Session(app)
+genre_tags=['edm', 'rap', 'pop', 'r&b', 'latin', 'rock']
+subgenre_tags=['progressive electro house', 'southern hip hop', 'indie poptimism', 'latin hip hop', 'neo soul', 'pop edm', 'electro house', 'hard rock', 'gangster rap', 'electropop', 'urban contemporary', 'hip hop', 'dance pop', 'classic rock', 'trap', 'tropical', 'latin pop', 'hip pop', 'big room', 'new jack swing', 'post-teen pop', 'permanent wave', 'album rock', 'reggaeton']
 
+GENRES = [tag.lower() for tag in genre_tags + subgenre_tags]
 
 @app.route("/")
 def login():
@@ -67,9 +70,13 @@ def callback():
     #print("token\n", token_info )
     session["access_token"] = token_info["access_token"]
     session["refresh_token"] = token_info["refresh_token"]
-    session["likedsongs"]=['hello']
+    session["likedsongs"]=[]
     session["dislikedsongs"]=[]
     session["allsongs"]=[]
+    session["song_embeddings"]=[]
+    session["user_embedding_sum"]=np.zeros((1,384))
+    session["num_likes"]=0
+    session["seen_song_ids"]=set()
     session["tags"]=[]
 
     #print("session_access_token\n", session["access_token"])
@@ -79,25 +86,22 @@ def callback():
     "Authorization": f"Bearer {session["access_token"]}"
     }
 
-    songs = requests.get("https://api.spotify.com/v1/me/top/tracks", headers=auth_header)
+    songs = requests.get("https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10", headers=auth_header)
     tracks = songs.json()["items"]
     index=0
     song_recs=set()
     k=tracks[index]
-    index+=1
     print("THESE ARE THE KEYS!!!!")
     print(k.keys())
     print("trying to get audio features now!")
-    genre_tags=['edm', 'rap', 'pop', 'r&b', 'latin', 'rock']
-    subgenre_tags=['progressive electro house', 'southern hip hop', 'indie poptimism', 'latin hip hop', 'neo soul', 'pop edm', 'electro house', 'hard rock', 'gangster rap', 'electropop', 'urban contemporary', 'hip hop', 'dance pop', 'classic rock', 'trap', 'tropical', 'latin pop', 'hip pop', 'big room', 'new jack swing', 'post-teen pop', 'permanent wave', 'album rock', 'reggaeton']
     similar_Songs=[]
-    model_cross= CrossEncoder('cross-encoder/nli-distilroberta-base')
-    GENRES = [tag.lower() for tag in genre_tags + subgenre_tags]
+    
     COMMON_TAGS = {
     "music", "song", "songs", "favorite", "favorites", "spotify", "myspotigrambot",
     "2020", "2021", "2022", "2023", "2024", "new", "old", "top", "hits", "artist", "track"
 }
-    model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
+    
+    embeds=[]
     for song_dict in tracks:
         #print(song_dict['id'])
         #print(auth_header)
@@ -115,7 +119,7 @@ def callback():
                 # Filter tags
 
                 # Optional: remove duplicates
-                sequence = ' '.join(raw_tags[:10])
+                sequence = ' '.join(raw_tags)
                 raw_scores = model_cross.predict([(sequence, genre) for genre in GENRES])
                 scores = np.array([score[1] for score in raw_scores])  # take probability for label=1
 
@@ -127,18 +131,25 @@ def callback():
                 # Format the genres into a sentence
                 embeddings = model.encode([genre_sentence]) 
                 print("Embedding shape:", embeddings.shape)
-                normalized_vectors = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-                distances, indices = faiss_index.search(normalized_vectors, 5)
-                for idx, dist in zip(indices[0], distances[0]):
-                    track_name, artist_name = song_info[idx]
-                    print(f"{track_name} by {artist_name} (Score: {dist:.4f})")
-                    song_recs.add((track_name,artist_name))
-            else:
-                print(f"No tags found for {track_name}")
-                song_dict['lastfm_tags'] = []
-
-    
-
+                normalized_vectors = embeddings / np.linalg.norm(embeddings)
+                embeds.append(normalized_vectors)
+                #distances, indices = faiss_index.search(normalized_vectors, 5)
+                #for idx, dist in zip(indices[0], distances[0]):
+                 #   track_name, artist_name = song_info[idx]
+                 #   print(f"{track_name} by {artist_name} (Score: {dist:.4f})")
+                  # song_recs.add((track_name,artist_name))
+            # else:
+            #     print(f"No tags found for {track_name}")
+            #     song_dict['lastfm_tags'] = []
+    session['song_embeddings']=embeds
+    new_tracks=[]
+    # for song_name,artist in song_recs:
+    #     song_name_url=song_name.replace(" ", "%20")
+    #     print(song_name_url)
+    #     search_url=f"https://api.spotify.com/v1/search?q={song_name_url}&type=track&limit=1"
+    #     new_song = requests.get(search_url, headers=auth_header)
+    #     track = new_song.json()
+    #     new_tracks.append(track['tracks']['items'][0])
 
     #print(i.keys())
     #for i in tracks:
@@ -159,114 +170,63 @@ def swipe():
 def handleaction():
     action=request.form["action"]
     index=int(request.form["index"])
-    session['song_data']={}
-    song_data={}
-    #tracks=list(request.form["allltracks"])
-    #print("this is the track", tracks)
-    #name=request.form["track"]
-    song_index=index-1
-    
-    tags=session.get("tags",[])
+    auth_header={
+    "Authorization": f"Bearer {session["access_token"]}"
+    }
     liked_songs=session.get("likedsongs", [])
+    user_embedding_sum=session.get("user_embedding_sum",np.zeros((1,384)))
+    numlikes=session.get("num_likes",0)
+    embeddings_matrix=session.get("song_embeddings")
     disliked_songs=session.get("dislikedsongs", [])
-    #print( "pRINTHIGN ", liked_songs)
-    favsongs=session.get("allsongs", [])
-    print("this is handle_action",len(favsongs))
-    #print("YOUR INTQ!!!\n", index)
+    all_songs=session.get("allsongs", [])
     if action=="like":
-        #print(session["favsongs"])
-        liked_songs.append(favsongs[song_index]["name"])
-        song_data[favsongs[song_index]["name"]]={"id": favsongs[song_index]["id"], "artists": favsongs[song_index]["artists"]}
-        response = client.models.generate_content(
-            model="gemini-1.5-pro-002",
-            contents=f"Give me 6 short, comma-separated descriptive tags for the song {favsongs[song_index]["name"]} by {favsongs[song_index]["artists"]}. Focus on mood, genre, tempo, context, and lyrics. done end on period only csv",
-        )
-        print(favsongs[song_index]["preview_url"])
+        current_embedding = session["song_embeddings"][index]
+        user_embedding_sum+=current_embedding
+        numlikes+=1
+        liked_songs.append(all_songs[index]['name'])
 
-        print(response.text)
-        a=response.text.split()
-        if len(tags)>10:
-            tags.pop(0)
-            tags.append(a)
-        else:
-            tags.append(a)
-        session["tags"]=tags
-        #print(tags)
-        # vectorizer = TfidfVectorizer()
-        # tag_matrix = vectorizer.fit_transform(a)
-        # #print(tag_matrix)
-        # similarity_matrix = cosine_similarity(tag_matrix)
-        # print(similarity_matrix)
-        print(len(tags))
-        if len(tags)%10==0:
-            response2 = client.models.generate_content(
-                model="gemini-2.5-pro",
-                contents= f"""
-                    I will give you music tags. Based only on these tags: {tags}, give me a list of exactly 10 Spotify songs that match these tags.
 
-                    Only output the song titles as a comma-separated list. Do NOT write anything else — no explanations, no numbering.
+        if numlikes%5==0:
+            #searching with 5 liked songs with faiss to get 10 recommendations
+            user_vector = user_embedding_sum / numlikes
+            normal_embedded_sum=user_vector / np.linalg.norm(user_vector)
+            distances, indices = faiss_index.search(normal_embedded_sum.reshape(1, -1), 10)
 
-                    Example format:
-                    Song1, Song2, Song3, Song4, Song5, Song6
-                    """,
-                )
-            #print(response2.text)
-            c=str(response2.text)
-            ab=c.split(", ")
-            print(ab)
-            access1=session.get("access_token")
-            headers2 = {
-                "Authorization": f"Bearer {access1}"  # Use a valid token
-            }
-
-            
-            for song_name in ab:
-                song_name_url=song_name.replace(" ", "%20")
-                print(song_name_url)
+            for idx, dist in zip(indices[0], distances[0]):
+                track_name, artist_name = song_info[idx]
+                print(f"{track_name} by {artist_name} (Score: {dist:.4f})")
+                song_name_url=track_name.replace(" ", "%20")
                 search_url=f"https://api.spotify.com/v1/search?q={song_name_url}&type=track&limit=1"
-                new_song = requests.get(search_url, headers=headers2)
+                new_song = requests.get(search_url, headers=auth_header)
                 track = new_song.json()
-                favsongs.pop(0)
-                favsongs.append(track['tracks']['items'][0])
-                session['allsongs']=favsongs
-                trial_a=session.get('allsongs', [])
-                for i in trial_a:
-                    print(i['name'])
-        # elif len(tags)>=13:
-        #     response2 = client.models.generate_content(
-        #         model="gemini-2.0-flash",
-        #         contents= f"""
-        #             I will give you music tags. Based only on these tags: {tags}, give me a list of exactly 6 Spotify songs that match these tags.
+                all_songs.append(track['tracks']['items'][0])
+                song_audio_tags= requests.get(f"https://ws.audioscrobbler.com/2.0/?method=track.gettoptags&artist={artist_name}&track={track_name}&api_key={last_api_key}&format=json")
+                if song_audio_tags.status_code == 200:
+                    # Parse the JSON response
+                    response_data = song_audio_tags.json()
+                    if 'toptags' in response_data and 'tag' in response_data['toptags']:
+                        tags = response_data['toptags']['tag']
+                        raw_tags = [tag['name'].strip().lower() for tag in tags if 'name' in tag]
+                        sequence = ' '.join(raw_tags)
+                        raw_scores = model_cross.predict([(sequence, genre) for genre in GENRES])
+                        scores = np.array([score[1] for score in raw_scores])  # take probability for label=1
 
-        #             Only output the song titles as a comma-separated list. Do NOT write anything else — no explanations, no numbering.
-
-        #             Example format:
-        #             Song1, Song2, Song3, Song4, Song5, Song6
-        #             """,
-        #         )
-        #     c=str(response2.text)
-        #     ab=c.split(", ")
-        #     print(ab)
-       
-            #print(response2.text)
-        
-       
-            
-
-       
-        
-
-        # try:
-        #     print("Error JSON:", song_features.json())
-        # except ValueError:
-        #     print("Response is not JSON formatted.")
-        session['likedsongs']=liked_songs
+                        top_indices = scores.argsort()[-5:][::-1]
+                        top_genres = [(GENRES[i], scores[i]) for i in top_indices]
+                        genre_sentence = f"{top_genres[0][0]} {top_genres[1][0]} {top_genres[2][0]}{top_genres[3][0]}{top_genres[4][0]}"
+                        # Format the genres into a sentence
+                        embedding = model.encode([genre_sentence])[0]
+                        embeddings_matrix = np.vstack(session.get("song_embeddings"))
+                        normalized_vectors = embedding / np.linalg.norm(embedding)
+                        normalized_embedding = normalized_vectors.reshape(-1)
+                        embeddings_matrix = np.vstack([embeddings_matrix, normalized_embedding])
+                        session['song_embeddings']=embeddings_matrix
     else:
-        disliked_songs.append(favsongs[song_index]["name"])
+        disliked_songs.append(all_songs[index]["name"])
         print(disliked_songs)
-        session['dislikedsgptongs']=disliked_songs
-    if index>=19:
-        index=0
-    return render_template("swipe.html", track=favsongs[index], index=index+1)
+        session['dislikedsongs']=disliked_songs
+    session['num_likes']=numlikes
+    session['user_embedding_sum']=user_embedding_sum 
+    return render_template("swipe.html", track=all_songs[index], index=index+1)
 
 
