@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>About | SwipeTrack</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/swipe.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Cormorant+Garamond:wght@700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Cormorant Garamond', serif;
+      background-color: #121212;
+      color: white;
+    }
+
+    .background-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(to bottom right, #1e1e1e, #2c2c2c);
+      z-index: -1;
+    }
+    .navbar {
+  width: 100%;
+  padding: 1.2rem 2.5rem;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+}
+
+.navbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.navbar-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.25rem;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.06);
+  transition: all 0.3s ease;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-link {
+  color: #f0f0f0;
+  text-decoration: none;
+  font-size: 1.1rem;
+  font-family: 'Cormorant Garamond', serif;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.nav-link:hover {
+  opacity: 1;
+}
+
+
+    .content {
+      max-width: 800px;
+      margin: 5rem auto;
+      padding: 2rem;
+      background-color: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+    }
+
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+
+    p {
+      font-size: 1.2rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    .back-btn {
+      display: inline-block;
+      margin-top: 2rem;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid white;
+      border-radius: 8px;
+      text-decoration: none;
+      color: white;
+      transition: background 0.3s ease;
+    }
+
+    .back-btn:hover {
+      background-color: white;
+      color: black;
+    }
+  </style>
+</head>
+<body>
+  <div class="background-overlay"></div>
+
+  <!-- Navbar -->
+<!-- Navbar -->
+<!-- Navbar -->
+<!-- Navbar -->
+<div class="navbar">
+    <div class="navbar-center">
+      <span class="navbar-title">SWIPETRACK</span>
+    </div>
+    <div class="navbar-links">
+      <a href="/about" class="nav-link">About</a>
+    </div>
+  </div>
+  
+  
+
+  <!-- About Content -->
+  <div class="content">
+    <h1>Meet SwipeTrack 🎧</h1>
+    <p>
+      SwipeTrack is your personal AI DJ — an intelligent music matchmaker that learns what you vibe with and keeps the rhythm going.
+    </p>
+    <p>
+      As soon as you log in, SwipeTrack pulls your top 10 tracks directly from Spotify. You’ll swipe through these songs to let the AI know what hits and what misses.
+    </p>
+    <p>
+      Every time you tap "Like," our AI thinks harder. It decodes your taste, analyzes tags, learns your genre fingerprints, and starts recommending more songs — tailored just for you.
+    </p>
+    <p>
+      This isn’t just a playlist — it’s an evolving reflection of your musical identity.
+    </p>
+
+    <a href="/" class="back-btn">← Back to Swipe</a>
+  </div>
+</body>
+</html>

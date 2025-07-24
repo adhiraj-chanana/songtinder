@@ -345,5 +345,10 @@ def handleaction():
         # No more songs - could show results or generate more
         return render_template("swipe.html", track=None, index=next_index, message="No more songs available!")
 
+@app.route("/about")
+def about():
+    return render_template("about.html")
+
+
 if __name__ == "__main__":
     app.run(debug=True)

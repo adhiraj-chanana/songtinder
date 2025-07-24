@@ -5,45 +5,84 @@
   <title>Swipe Track</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/swipe.css') }}">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Cormorant+Garamond:wght@700&display=swap" rel="stylesheet">
-
 </head>
-<body>
-  <div class="background-overlay"></div>
 
+<body>
   <!-- Navbar -->
   <div class="navbar">
     <span class="navbar-title">SWIPETRACK</span>
-  </div>
-
-  <!-- Swipe Card -->
-  <div class="container">
-    <div id="track-card">
-      <img src="{{ track['album']['images'][0]['url'] }}" alt="Album Art" id="album-art">
-      <h2 id="track-name">{{ track['name'] }}</h2>
-      <p id="artist-name">{{ track['artists'][0]['name'] }}</p>
-
-      {% if track['preview_url'] %}
-        <audio id="preview" controls>
-          <source src="{{ track['preview_url'] }}" type="audio/mpeg">
-        </audio>
-      {% else %}
-        <p>No preview available</p>
-      {% endif %}
-      <a href="{{ track['external_urls']['spotify'] }}" target="_blank" class="listen-now-btn">
-        <span class="play-icon">▶</span> Listen on Spotify
-      </a>
+    <div class="navbar-links">
+      <button id="about-toggle" class="nav-link">About</button>
     </div>
-
-    <form method="POST" action="/handle_action">
-      <input type="hidden" name="track_id" value="{{ track['id'] }}">
-      <input type="hidden" name="index" value="{{ index }}">
-      <input type="hidden" name="alltracks" value="{{ alltracks }}">
-      <div class="buttons">
-        <button type="submit" name="action" value="dislike" class="btn dislike"> Dislike </button>
-        <button type="submit" name="action" value="like" class="btn like"> Like </button>
-      </div>
-    </form>
   </div>
 
+  <!-- About Modal -->
+  <div id="about-modal" class="about-modal hidden">
+    <div class="about-content">
+      <h2>👾 Welcome to SWIPETRACK</h2>
+      <p>This isn't your grandma's playlist.</p>
+      <p>🎧 We pull your top 10 tracks straight from Spotify to learn your vibe.</p>
+      <p>💡 Every time you <strong>like</strong> a song, our AI thinks harder...</p>
+      <p>✨ Then *BOOM* – it recommends even better ones just for you.</p>
+      <p>Built with 💜 to make your music feel understood.</p>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="container">
+    {% if track %}
+      <div id="track-card">
+        <img src="{{ track['album']['images'][0]['url'] }}" alt="Album Art" id="album-art">
+        <h2 id="track-name">{{ track['name'] }}</h2>
+        <p id="artist-name">{{ track['artists'][0]['name'] }}</p>
+
+        {% if track['preview_url'] %}
+          <audio id="preview" controls>
+            <source src="{{ track['preview_url'] }}" type="audio/mpeg">
+          </audio>
+        {% else %}
+          <p>No preview available</p>
+        {% endif %}
+
+        <a href="{{ track['external_urls']['spotify'] }}" target="_blank" class="listen-now-btn">
+          <span class="play-icon">▶</span> Listen on Spotify
+        </a>
+      </div>
+
+      <form method="POST" action="/handle_action">
+        <input type="hidden" name="track_id" value="{{ track['id'] }}">
+        <input type="hidden" name="index" value="{{ index }}">
+        <div class="buttons">
+          <button type="submit" name="action" value="dislike" class="btn dislike">Dislike</button>
+          <button type="submit" name="action" value="like" class="btn like" id="like-btn">Like</button>
+        </div>
+      </form>
+    {% else %}
+      <h3>{{ message or "No more songs!" }}</h3>
+    {% endif %}
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay">
+    <div class="loading-text">Thinking of songs...</div>
+  </div>
+
+  <!-- JavaScript -->
+  <script>
+    // Show loading overlay on Like button click
+    const likeButton = document.getElementById("like-btn");
+    if (likeButton) {
+      likeButton.addEventListener("click", () => {
+        document.getElementById("loading-overlay").style.display = "flex";
+      });
+    }
+
+    // Toggle about modal
+    const toggleBtn = document.getElementById("about-toggle");
+    const modal = document.getElementById("about-modal");
+    toggleBtn.addEventListener("click", () => {
+      modal.classList.toggle("hidden");
+    });
+  </script>
 </body>
 </html>
