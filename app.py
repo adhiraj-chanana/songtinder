@@ -11,6 +11,7 @@ from sentence_transformers import SentenceTransformer
 from sentence_transformers import CrossEncoder
 import numpy as np
 import faiss
+import redis
 import json
 load_dotenv()
 
@@ -23,6 +24,7 @@ client_secret= os.environ.get("CLIENT_SECRET")
 app.secret_key = os.environ.get("SECRET_KEY") or "fwbefwiejdiuebfibefib"
 api_key=os.environ.get("API_KEY")
 last_api_key=os.environ.get("LAST_FM_API")
+redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
 faiss_index = faiss.read_index("similarity_search/song_index.faiss")
 with open("similarity_search/song_info.json", "r") as f:
@@ -79,8 +81,18 @@ def get_song_embedding(song_dict, artist_name=None, track_name=None):
                     print(f"Genre sentence: {genre_sentence}")
                     
                     # Get embedding and normalize
-                    embedding = model.encode([genre_sentence])[0]
-                    normalized_embedding = embedding / np.linalg.norm(embedding)
+                    genre_sentence = genre_sentence.lower().strip()
+                    cached_embedding = redis_client.get(f"embedding:{genre_sentence}")
+
+                    if cached_embedding:
+                        print("📦 Loaded embedding from Redis cache!")
+                        normalized_vectors = np.fromstring(cached_embedding, sep=',').reshape(1, -1)
+                    else:
+                        print("⚙️  Computing embedding from scratch...")
+                        embedding = model.encode([genre_sentence])
+                        normalized_vectors = embedding / np.linalg.norm(embedding)
+                        redis_client.set(f"embedding:{genre_sentence}", ','.join(map(str, normalized_vectors.flatten())))
+
                     
                     return normalized_embedding
         
@@ -98,31 +110,35 @@ def get_song_embedding(song_dict, artist_name=None, track_name=None):
 def search_spotify_track(track_name, artist_name, auth_header):
     """Search for a track on Spotify and return track info"""
     try:
-        # Clean up the search query
+        print(f"Searching for: {track_name} by {artist_name}")
+
         track_query = track_name.replace(" ", "%20").replace("&", "%26")
         artist_query = artist_name.replace(" ", "%20").replace("&", "%26")
-        search_url = f"https://api.spotify.com/v1/search?q=track:{track_query}%20artist:{artist_query}&type=track&limit=1"
-        
-        response = requests.get(search_url, headers=auth_header)
-        
-        if response.status_code == 200:
+        cache_key = f"spotify:{track_name.lower()}:{artist_name.lower()}"
+
+        cached = redis_client.get(cache_key)
+        if cached:
+            print("Loaded from cache")
+            data = json.loads(cached)
+        else:
+            search_url = f"https://api.spotify.com/v1/search?q=track:{track_query}%20artist:{artist_query}&type=track&limit=1"
+            response = requests.get(search_url, headers=auth_header)
             data = response.json()
-            if data['tracks']['items']:
-                return data['tracks']['items'][0]
-        
-        # Fallback: try simpler search
-        simple_search = f"https://api.spotify.com/v1/search?q={track_query}&type=track&limit=1"
-        response = requests.get(simple_search, headers=auth_header)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data['tracks']['items']:
-                return data['tracks']['items'][0]
-                
+
+            if data.get("tracks", {}).get("items"):
+                redis_client.setex(cache_key, 86400, json.dumps(data))
+                print("Cached new result")
+
+        if data.get("tracks", {}).get("items"):
+            return data["tracks"]["items"][0]
+        else:
+            print("No track found")
+            return None
+
     except Exception as e:
-        print(f"Error searching for {track_name}: {e}")
-    
-    return None
+        print(f"Error: {e}")
+        return None
+
 
 @app.route("/")
 def login():
