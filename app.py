@@ -5,7 +5,7 @@ from flask_session import Session
 import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from google import genai
+#from google import genai
 from transformers import pipeline
 from sentence_transformers import SentenceTransformer
 from sentence_transformers import CrossEncoder
