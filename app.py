@@ -13,6 +13,7 @@ import numpy as np
 import faiss
 import redis
 import json
+from urllib.parse import urlparse
 load_dotenv()
 
 app = Flask(__name__)
