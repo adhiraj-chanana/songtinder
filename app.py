@@ -56,7 +56,7 @@ spotify_auth_url = "https://accounts.spotify.com/authorize?" + \
     "&state=" + str(state)
 
 
-model_cross= CrossEncoder('cross-encoder/nli-distilroberta-base')
+model_cross= CrossEncoder('cross-encoder/ms-marco-MiniLM-L6-v2')
 model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
 
 Session(app)
