@@ -24,7 +24,24 @@ client_secret= os.environ.get("CLIENT_SECRET")
 app.secret_key = os.environ.get("SECRET_KEY") or "fwbefwiejdiuebfibefib"
 api_key=os.environ.get("API_KEY")
 last_api_key=os.environ.get("LAST_FM_API")
-redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+redis_url = os.getenv("REDIS_URL")
+
+if redis_url:
+    url = urlparse(redis_url)
+    redis_client = redis.Redis(
+        host=url.hostname,
+        port=url.port,
+        password=url.password,
+        decode_responses=True
+    )
+else:
+    # Fallback to localhost for local dev
+    redis_client = redis.Redis(
+        host='localhost',
+        port=6379,
+        db=0,
+        decode_responses=True
+    )
 
 faiss_index = faiss.read_index("similarity_search/song_index.faiss")
 with open("similarity_search/song_info.json", "r") as f:
