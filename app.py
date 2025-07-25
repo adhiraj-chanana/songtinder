@@ -55,7 +55,6 @@ spotify_auth_url = "https://accounts.spotify.com/authorize?" + \
     "&scope=" + str(scopes) + \
     "&state=" + str(state)
 
-client = genai.Client(api_key=api_key)
 
 model_cross= CrossEncoder('cross-encoder/nli-distilroberta-base')
 model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
@@ -112,7 +111,7 @@ def get_song_embedding(song_dict, artist_name=None, track_name=None):
                         redis_client.set(f"embedding:{genre_sentence}", ','.join(map(str, normalized_vectors.flatten())))
 
                     
-                    return normalized_embedding
+                    return normalized_vectors
         
         print(f"No tags found for {track_name}, using default embedding")
         # Return a default embedding if no tags found
